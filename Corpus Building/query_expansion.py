@@ -150,11 +150,11 @@ wa_headers = {
     'x-rapidapi-key': "edc0265f5emsh7214b262b9a5476p1ddaa6jsne4d261fb39d3"
     }
 
-def get_synonyms_wordapi(w):
-    queryurl=wordapi_url+w+"/synonyms"
+def get_synonyms_wordapi(w,mode="synonyms"):
+    queryurl=wordapi_url+w+"/"+mode
     response = requests.request("GET", queryurl, headers=wa_headers)
     if response.status_code==200:
-        res=response.json()['synonyms']
+        res=response.json()mode]
     else:
         res=[]
         
