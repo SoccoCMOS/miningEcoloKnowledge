@@ -5,6 +5,10 @@ Created on Fri Sep 13 15:23:46 2019
 @author: simoussi
 """
 
+'''
+Dependencies: pygbif, pymediawiki, python-datamuse, wordnik-py3
+
+'''
 from pygbif import species
 import pandas as pd
 import numpy as np
@@ -46,11 +50,13 @@ def get_tax_path(q,include_target=False):
     
     return asc
 
+###### Get list of immediate descendents ####
 def get_subgroup(key,include_target=False):
     res=pd.DataFrame.from_dict(species.name_usage(key=key,data='children')['results'])
     
     return set(res['key'])
 
+###### Get list of all parents ####
 def get_supergroup(key,include_target=False):
     res=pd.DataFrame.from_dict(species.name_usage(key=key,data='parents'))
     
@@ -109,7 +115,7 @@ def query_inaturalist(q):
     return output
 
 
-#### Dictionary entry #####
+#### Oxford dictionary entry #####
 endpoint="https://od-api.oxforddictionaries.com/api/v2"
 app_id = "6f7a92e5"
 app_key = "1a37250a2aa39ee277041035778fe77f"
@@ -125,7 +131,7 @@ def get_dict_entry(word_id):
         
     return res
 
-#### Synonyms API ###
+#### Synonyms API ####
 ##Twinword
 twinword_url = "https://twinword-word-graph-dictionary.p.rapidapi.com/association/"
 tw_headers = {
@@ -137,11 +143,15 @@ def get_synonyms_twinword(w):
     querystring = {"entry":w}
     response = requests.request("GET", twinword_url, headers=tw_headers, params=querystring)
     if response.status_code==200:
-        res=response.json()['assoc_word_ex']
+        res=response.json()
+        if res['result_code']=='200':
+            out=res['assoc_word_ex']
+        else:
+            out=[]
     else:
-        res=[]
+        out=[]
         
-    return res
+    return out
 
 ##WordsAPI
 wordapi_url = "https://wordsapiv1.p.rapidapi.com/words/"
@@ -150,14 +160,90 @@ wa_headers = {
     'x-rapidapi-key': "edc0265f5emsh7214b262b9a5476p1ddaa6jsne4d261fb39d3"
     }
 
+'''
+Possible modes: 
+    definitions
+    synonyms
+    antonyms
+    examples
+    typeOf
+    hasTypes
+    partOf
+    hasParts
+    instanceOf
+    hasInstances
+    memberOf
+    hasMembers
+    substanceOf
+    hasSubstances
+    hasAttribute
+    inCategory
+    hasCategories
+    also
+    entails
+    pertainsTo
+    similarTo
+'''
+
 def get_synonyms_wordapi(w,mode="synonyms"):
     queryurl=wordapi_url+w+"/"+mode
     response = requests.request("GET", queryurl, headers=wa_headers)
     if response.status_code==200:
-        res=response.json()mode]
+        res=response.json()[mode]
     else:
         res=[]
         
     return res
 
-   
+
+##Datamuse API
+from datamuse import datamuse
+def suggest_word_datamuse(w,topics,max_res=100):
+    datamuseapi = datamuse.Datamuse()  
+    results=[]
+    mean=pd.DataFrame.from_dict(datamuseapi.words(ml=w,topics=topics,max=max_res))
+    mean['tag']='means'
+    results.append(mean)
+    syn=pd.DataFrame.from_dict(datamuseapi.words(rel_syn=w,topics=topics,max=max_res))
+    syn['tag']='synonym'
+    results.append(syn)
+    typ=pd.DataFrame.from_dict(datamuseapi.words(rel_spc=w,topics=topics,max=max_res))
+    typ['tag']='type'
+    results.append(typ)
+    exm=pd.DataFrame.from_dict(datamuseapi.words(rel_gen=w,topics=topics,max=max_res))
+    exm['tag']='exampleOf'
+    results.append(exm)
+    comp=pd.DataFrame.from_dict(datamuseapi.words(rel_com=w,topics=topics,max=max_res))
+    comp['tag']='hasComponent'
+    results.append(comp)
+    partof=pd.DataFrame.from_dict(datamuseapi.words(rel_par=w,topics=topics,max=max_res))
+    partof['tag']='partOf'
+    results.append(partof)
+    
+    output=pd.concat(results,ignore_index=True,sort=True)
+    
+    return output
+
+##Wordnik API
+from wordnik import swagger , WordApi
+wordnik_key='71ov2rh3r2p6gpfr1aa7psv49iq90dkyzcb8gale1aduciaxd'
+wordnik_url='http://api.wordnik.com/v4'
+
+'''
+Output contains following keys: 
+    'cross-reference', 'has_topic', 'hypernym', 'rhyme', 'same-context', 'synonym', 'variant', 'verb-form'
+'''
+
+def related_wordnik(w,canonicform=True):
+    client = swagger.ApiClient(wordnik_key, wordnik_url)
+    wordApi = WordApi.WordApi(client)
+    res=wordApi.getRelatedWords(w,useCanonical=canonicform)#,relationshipTypes=types,limitPerRelationshipType=limit)
+    output=dict()
+    if res!='null getRelatedWords result':
+        for related in res:
+            output.update({related.relationshipType:related.words})
+            
+    return output
+    
+
+    
